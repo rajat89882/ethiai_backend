@@ -29,10 +29,10 @@ app.get("/", (req, res) => {
 // MySQL Database Connection
 const db = mysql.createPool({
   connectionLimit: 10000, // Limits the number of simultaneous connections
-  host: "localhost",
-  user: "root", // Use appropriate MySQL username
-  password: "", // Provide actual password here
-  database: "rdata", // Ensure this database exists
+  host: "ethiai-database.c1wskissc0gm.eu-north-1.rds.amazonaws.com",
+  user: "ethiaiadmin",
+  password: "Ethiai$Db2025",
+  database: "ethiai_database",
   debug: false,
   connectTimeout: 10000,
 });
