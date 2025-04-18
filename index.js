@@ -68,7 +68,7 @@ db.getConnection((err, connection) => {
 });
 
 app.use(cors({
-  origin: ["https://ethiai.hostingoncloud.in", "https://ethiai.hostingoncloud.in"],
+  origin: ["https://ethiai.hostingoncloud.in", "http://16.171.116.106:5000"],
   credentials: true,
 }));
 app.use(express.json());
