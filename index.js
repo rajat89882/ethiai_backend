@@ -68,7 +68,7 @@ db.getConnection((err, connection) => {
 });
 
 app.use(cors({
-  origin: ["https://ethiai.hostingoncloud.in", "http://16.171.116.106:5000"],
+  origin: ["https://frontend.ethiai.io", "https://ethiai.hostingoncloud.in"],
   credentials: true,
 }));
 app.use(express.json());
@@ -105,8 +105,8 @@ app.post("/checkoutpay", async (req, res) => {
       metadata: {
         plan: plan,
       },
-      success_url: `https://ethiai.hostingoncloud.in/subscription-success?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `https://ethiai.hostingoncloud.in/subscription-success?canceled=true`,
+      success_url: `https://frontend.ethiai.io/subscription-success?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `https://frontend.ethiai.io/subscription-success?canceled=true`,
     });
 
     res.json({ url: session.url });
@@ -313,7 +313,7 @@ app.post("/user/insertAttempt", async (req, res) => {
   } catch (error) {
     console.error("Error inserting or updating quiz data:", error);
     res
-      .status(500)
+      .status(200)
       .json({ error: error.message || "Failed to process quiz data" });
   }
 });
@@ -1060,7 +1060,7 @@ app.post("/dashboardtext", (req, res) => {
   db.query(selectQuery, [userId], (error, result) => {
     if (error) {
       console.error("Error fetching user subscription:", error);
-      return res.status(500).json({ error: "Database error", status: "2" });
+      return res.status(200).json({ error: "Database error", status: "2" });
     }
     const attemptquiz = result.length
     if (result.length === 0) {
@@ -1069,7 +1069,7 @@ app.post("/dashboardtext", (req, res) => {
       db.query(selectQuery, [plan], (error, result) => {
         if (error) {
           console.error("Error fetching user dashboard:", error);
-          return res.status(500).json({ error: "Database error", status: "2" });
+          return res.status(200).json({ error: "Database error", status: "2" });
         }
 
         if (result.length > 0) {
@@ -1078,7 +1078,7 @@ app.post("/dashboardtext", (req, res) => {
             .json({ status: 1, data: result[0].first_time });
         } else {
           return res
-            .status(404)
+            .status(200)
             .json({ error: "No dashboard data found", status: "3" });
         }
       });
@@ -1088,7 +1088,7 @@ app.post("/dashboardtext", (req, res) => {
       db.query(selectQuery, [plan], (error, result) => {
         if (error) {
           console.error("Error fetching user dashboard:", error);
-          return res.status(500).json({ error: "Database error", status: "2" });
+          return res.status(200).json({ error: "Database error", status: "2" });
         }
 
         return res.status(200).json({ status: 2, data: result, attemptquiz });
@@ -1937,7 +1937,7 @@ app.post("/getQuizResultssUser", async (req, res) => {
     }
 
     if (results.length === 0) {
-      return res.status(404).json({
+      return res.status(200).json({
         error: "Begin assessment to evaluate your AI system's compliance!",
       });
     }
@@ -2000,7 +2000,7 @@ app.post("/getQuizResultssUser", async (req, res) => {
       }
 
       if (answerResults.length === 0) {
-        return res.status(404).json({ error: "No matching answers found" });
+        return res.status(200).json({ error: "No matching answers found" });
       }
 
       // Now calculate the scores and attach answers to attempts
@@ -2496,7 +2496,7 @@ app.post("/getQuizResultss", async (req, res) => {
     }
 
     if (results.length === 0) {
-      return res.status(404).json({ error: "No attempts found for this user" });
+      return res.status(200).json({ error: "No attempts found for this user" });
     }
 
     // Group results by practiceheading
@@ -2884,7 +2884,7 @@ app.post("/getQuizResults", async (req, res) => {
     }
 
     if (results.length === 0) {
-      return res.status(404).json({ error: "No attempts found for this user" });
+      return res.status(200).json({ error: "No attempts found for this user" });
     }
 
     // Group results by practice
@@ -3679,7 +3679,7 @@ app.post("/admin/get-support-data", (req, res) => {
 
   if (!plan) {
     console.log("Plan is missing in request.");
-    return res.status(400).json({ error: "Plan is required" });
+    return res.status(200).json({ error: "Plan is required" });
   }
 
   // Fetch main heading
