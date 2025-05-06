@@ -26,7 +26,6 @@ app.get("/", (req, res) => {
 
 // Catch-all route to serve the frontend for any other routes (for client-side routing)
 
-// MySQL Database Connection
 const db = mysql.createPool({
   connectionLimit: 10000, // Limits the number of simultaneous connections
   host: "ethiai-database.c1wskissc0gm.eu-north-1.rds.amazonaws.com",
@@ -36,7 +35,6 @@ const db = mysql.createPool({
   debug: false,
   connectTimeout: 10000,
 });
-
 // Use db.promise() for promise-based queries
 const dbPromise = db.promise();
 
@@ -74,19 +72,33 @@ app.use(cors({
 app.use(express.json());
 
 app.post("/checkoutpay", async (req, res) => {
-  const { plan, email } = req.body;
+  const { plan, email, validate } = req.body;
+
+  // Validate required fields
+  if (!plan || !email) {
+    return res.status(400).json({ error: "Plan and email are required" });
+  }
+
   try {
     let productId;
     let priceId;
 
-    switch (plan) {
+    switch (validate) {
+      case "Basic-month":
+        productId = "prod_SG6m3Lu64gSBg3";
+        priceId = "price_1RLaYc2Mw3LdtP6uDGejy9IX";
+        break;
+      case "Basic-year":
+        productId = "prod_SG6nfp2nb60j4e";
+        priceId = "price_1RLaZW2Mw3LdtP6uH7neAumx";
+        break;
       case "PRO-month":
-        productId = "prod_RvKPItHghEHT35";
-        priceId = "price_1R1Tko2Mw3LdtP6ud8O5U0GW";
+        productId = "prod_SG6t1l0ctvaIAe";
+        priceId = "price_1RLafM2Mw3LdtP6uarKYPqjs";
         break;
       case "PRO-year":
-        productId = "prod_RvV4BQOzjsc19Z";
-        priceId = "price_1R1e3x2Mw3LdtP6uE3HNH0dm";
+        productId = "prod_SG6tILuUsFy1s8";
+        priceId = "price_1RLafr2Mw3LdtP6uuaL5LpGy";
         break;
       default:
         return res.status(400).json({ error: "Invalid plan selected" });
@@ -430,7 +442,6 @@ app.post("/register", (req, res) => {
   const { name, email, organization, otp, password, type, days, deviceId } =
     req.body;
 
-
   // Validate input fields
   if (!name || !email || !password || !otp || !type || !days) {
     return res
@@ -448,14 +459,13 @@ app.post("/register", (req, res) => {
       return res.status(500).json({ error: "Database error", status: "2" });
     }
 
-    // If no matching OTP or email is found
     if (result.length === 0) {
       return res
         .status(400)
         .json({ error: "Invalid OTP or Email.", status: "2" });
     }
 
-    // Update user record and mark as verified
+    // Update user record
     const updateUserQuery = `
       UPDATE signup 
       SET name = ?, organization = ?, verify = 'yes', password = ?, device_id = ?
@@ -470,69 +480,39 @@ app.post("/register", (req, res) => {
           return res.status(500).json({ error: "Database error", status: "2" });
         }
 
-        // Get the updated user ID
         const userId = result[0].id;
 
-        // Set subscription dates
-        const startDate = moment().format("YYYY-MM-DD");
-        const endDate = moment().add(days, "days").format("YYYY-MM-DD");
+        // Fetch updated user details (no subscription insertion)
+        const getUserDetailsQuery = "SELECT * FROM signup WHERE id = ?";
+        db.query(getUserDetailsQuery, [userId], (err, userDetails) => {
+          if (err) {
+            console.error("Error fetching user details:", err);
+            return res
+              .status(500)
+              .json({ error: "Database error", status: "2" });
+          }
 
-        // Insert subscription details
-        const insertSubscriptionQuery = `
-        INSERT INTO subscription (user_id, days, type, start_date, end_date) 
-        VALUES (?, ?, ?, ?, ?)
-      `;
-        db.query(
-          insertSubscriptionQuery,
-          [email, days, type, startDate, endDate],
-          (err) => {
-            if (err) {
-              console.error("Error inserting subscription:", err);
-              return res
-                .status(500)
-                .json({ error: "Database error", status: "2" });
-            }
-
-            // Fetch updated user details
-            const getUserDetailsQuery = "SELECT * FROM signup WHERE id = ?";
-            db.query(getUserDetailsQuery, [userId], (err, userDetails) => {
-              if (err) {
-                console.error("Error fetching user details:", err);
-                return res
-                  .status(500)
-                  .json({ error: "Database error", status: "2" });
-              }
-
-              if (userDetails.length === 0) {
-                return res.status(500).json({
-                  error: "User not found after registration",
-                  status: "2",
-                });
-              }
-
-              // Send successful response
-              return res.status(201).json({
-                message: "User registered successfully",
-                userId: userDetails[0].id,
-                name: userDetails[0].name,
-                email: userDetails[0].email,
-                subscription: {
-                  user_id: userId,
-                  type,
-                  days,
-                  start_date: startDate,
-                  end_date: endDate,
-                },
-                status: "1",
-                result: userDetails[0],
-              });
+          if (userDetails.length === 0) {
+            return res.status(500).json({
+              error: "User not found after registration",
+              status: "2",
             });
           }
-        );
+
+          return res.status(201).json({
+            message: "User registered successfully",
+            userId: userDetails[0].id,
+            name: userDetails[0].name,
+            email: userDetails[0].email,
+            status: "1",
+            result: userDetails[0],
+          });
+        });
       }
     );
   });
 });
+
 
 app.post("/login", async (req, res) => {
   const { email, password, deviceId } = req.body;
@@ -559,6 +539,7 @@ app.post("/login", async (req, res) => {
         message:
           "Access Restricted: Your AI system is not eligible for this assessment. Please contact our support team for further assistance.",
         status: "3",
+        data: result
       });
     }
 
