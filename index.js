@@ -66,10 +66,19 @@ db.getConnection((err, connection) => {
 });
 
 app.use(cors({
-  origin: ["https://frontend.ethiai.io", "https://ethiai.hostingoncloud.in"],
+  origin: ["https://frontend.ethiai.io", "https://backend.ethiai.io"],
   credentials: true,
 }));
 app.use(express.json());
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: "developerzone89@gmail.com",
+    pass: "jfdgufvjpxaatmsz",
+  },
+});
+
 
 app.post("/checkoutpay", async (req, res) => {
   const { plan, email, validate } = req.body;
@@ -128,101 +137,242 @@ app.post("/checkoutpay", async (req, res) => {
   }
 });
 
+const sendEmail = async ({ to, subject, html }) => {
+  try {
+    const info = await transporter.sendMail({
+      from: `"EthiAI" <developerzone89@gmail.com>`,
+      to,
+      subject,
+      html,
+    });
+    console.log("Email sent:", info.messageId);
+    return info;
+  } catch (error) {
+    console.error("Error sending email:", error);
+    throw error;
+  }
+};
+
+// Email template for payment success
+const generatePaymentSuccessEmail = ({
+  userEmail,
+  plan,
+  amount,
+  paymentDate,
+  validityDate,
+  user_name
+}) => {
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Payment Successful - EthiAI</title>
+      <style>
+        body { font-family: 'Arial', sans-serif; background-color: #f4f4f9; margin: 0; padding: 0; color: #333; }
+        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 10px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); overflow: hidden; }
+        .header { background: linear-gradient(90deg, #1e3a8a, #3b82f6); padding: 20px; text-align: center; }
+        .header img { max-width: 150px; }
+        .content { padding: 30px; }
+        .content h1 { color: #1e3a8a; font-size: 24px; margin-bottom: 10px; }
+        .content p { font-size: 16px; line-height: 1.6; margin-bottom: 15px; }
+        .details { background-color: #f9fafb; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .details p { margin: 5px 0; font-size: 15px; }
+        .details p strong { color: #1e3a8a; }
+        .cta-button { display: inline-block; padding: 12px 25px; background: linear-gradient(90deg, #3b82f6, #60a5fa); color:#fff !important; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold; margin-top: 20px; }
+        .cta-button:hover { background: linear-gradient(90deg, #2563eb, #3b82f6); }
+        .footer { background-color: #f4f4f9; padding: 15px; text-align: center; font-size: 14px; color: #666; }
+        .footer a { color: #3b82f6; text-decoration: none; }
+        .main_head{font-size:22px; font-weight:600; color:#fff; text-align:center;}
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1 class="main_head">EthiAI</h1>
+        </div>
+        <div class="content">
+          <h1>Welcome to EthiAI, ${userEmail}!</h1>
+          <p>Thank you for choosing EthiAI. We’re thrilled to confirm that your payment for the <strong>${plan}</strong> plan has been successfully processed.</p>
+          <div class="details">
+            <p><strong>Plan:</strong> ${plan}</p>
+            <p><strong>Amount Paid:</strong> €${parseFloat(amount).toFixed(2)}</p>
+            <p><strong>Payment Date:</strong> ${paymentDate}</p>
+            <p><strong>Valid Until:</strong> ${validityDate}</p>
+          </div>
+          <p>Get started by logging into your account and exploring the features of your plan. We’re here to support you every step of the way!</p>
+          <a href="https://frontend.ethiai.io/onboarding/quiz" class="cta-button" style="color="#fff !important"">Access Your Account</a>
+        </div>
+        <div class="footer">
+          <p>Visit our website at <a href="https://frontend.ethiai.io">https://frontend.ethiai.io</a></p>
+          <p>© ${new Date().getFullYear()} EthiAI. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+// /api/subscription endpoint with email sending
 app.get("/api/subscription", async (req, res) => {
   const { session_id } = req.query;
 
-  // Check for missing session_id
   if (!session_id) {
     return res.status(400).json({ error: "Session ID is required." });
   }
 
   try {
-    const session = await stripe.checkout.sessions.retrieve(session_id);
+    // Check if session_id has already been processed
+    const checkSessionSql = `SELECT * FROM subscription WHERE stripe_session_id = ?`;
+    db.query(checkSessionSql, [session_id], async (err, sessionResult) => {
+      if (err) {
+        console.error("Error checking session_id:", err);
+        return res.status(500).json({ error: "Database error" });
+      }
 
-    if (session.payment_status === "paid") {
-      const { amount_total, metadata } = session;
+      if (sessionResult.length > 0) {
+        // Session has already been processed, return existing data
+        const existingRecord = sessionResult[0];
+        return res.status(200).json({
+          message: "Payment already processed.",
+          session_id,
+          plan: existingRecord.type,
+          amount: existingRecord.amount_paid,
+        });
+      }
 
-      const user_id = session.customer_email || "1"; // Fallback user_id
-      const plan = metadata?.plan || "unknown";
-      const days = plan === "PRO-month" ? 30 : 365;
-      const startDate = new Date();
-      const endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + days);
+      // Retrieve session from Stripe
+      const session = await stripe.checkout.sessions.retrieve(session_id);
 
-      // Check if user_id already exists
-      const checkSql = `SELECT * FROM subscription WHERE user_id = ?`;
-      db.query(checkSql, [user_id], (err, result) => {
-        if (err) {
-          console.error("Error checking user:", err);
-          return res.status(500).json({ error: "Database error" });
-        }
+      if (session.payment_status === "paid" && session.status === "complete") {
+        const { amount_total, metadata, customer_email } = session;
 
-        if (result.length > 0) {
-          // If user exists, update the record
-          const updateSql = `
-            UPDATE subscription
-            SET stripe_session_id = ?, amount_paid = ?, days = ?, type = ?, start_date = ?, end_date = ?
-            WHERE user_id = ?
-          `;
+        const user_id = customer_email || "1"; // Fallback user_id
+        const plan = metadata?.plan || "unknown";
+        const days = plan.includes("month") ? 30 : 365;
+        const startDate = new Date();
+        const endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + days);
 
-          const updateValues = [
-            session_id,
-            amount_total / 100,
-            days,
-            plan,
-            startDate,
-            endDate,
-            user_id,
-          ];
+        const paymentDate = startDate.toLocaleDateString("en-GB");
+        const validityDate = endDate.toLocaleDateString("en-GB");
+        const amount = (amount_total / 100).toFixed(2);
 
-          db.query(updateSql, updateValues, (err) => {
-            if (err) {
-              console.error("Database update error:", err);
-              return res.status(500).json({ error: "Database error" });
+        // Check if user_id already exists
+        const checkSql = `SELECT * FROM subscription WHERE user_id = ?`;
+        db.query(checkSql, [user_id], async (err, result) => {
+          if (err) {
+            console.error("Error checking user:", err);
+            return res.status(500).json({ error: "Database error" });
+          }
+          try {
+            if (result.length > 0) {
+              
+              const updateSql = `
+                UPDATE subscription
+                SET stripe_session_id = ?, amount_paid = ?, days = ?, type = ?, start_date = ?, end_date = ?
+                WHERE user_id = ?
+              `;
+              const updateValues = [
+                session_id,
+                amount,
+                days,
+                plan,
+                startDate,
+                endDate,
+              ];
+
+              db.query(updateSql, updateValues, async (err) => {
+                if (err) {
+                  console.error("Database update error:", err);
+                  return res.status(500).json({ error: "Database error" });
+                }
+
+                // Send email after successful update
+                const emailHtml = generatePaymentSuccessEmail({
+                  userEmail: user_id,
+                  plan,
+                  amount,
+                  paymentDate,
+                  validityDate,
+                });
+
+                await sendEmail({
+                  to: user_id,
+                  subject: "🎉 Payment Successful - Welcome to EthiAI!",
+                  html: emailHtml,
+                });
+
+                console.log("Payment updated successfully.");
+                res.status(200).json({
+                  message: "Payment updated successfully.",
+                  session_id,
+                  plan,
+                  amount,
+                });
+              });
+            } else {
+              // Insert new record
+
+              const insertSql = `
+                INSERT INTO subscription (user_id, stripe_session_id, amount_paid, days, type, start_date, end_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+              `;
+              const insertValues = [
+                user_id,
+                session_id,
+                amount,
+                days,
+                plan,
+                startDate,
+                endDate,
+              ];
+
+              db.query(insertSql, insertValues, async (err) => {
+                if (err) {
+                  console.error("Database insertion error:", err);
+                  return res.status(500).json({ error: "Database error" });
+                }
+
+                // Send email after successful insertion
+                const emailHtml = generatePaymentSuccessEmail({
+                  userEmail: user_id,
+                  plan,
+                  amount,
+                  paymentDate,
+                  validityDate,
+                });
+
+                await sendEmail({
+                  to: user_id,
+                  subject: "🎉 Payment Successful - Welcome to EthiAI!",
+                  html: emailHtml,
+                });
+
+                console.log("Payment saved successfully.");
+                res.status(200).json({
+                  message: "Payment verified and saved successfully.",
+                  session_id,
+                  plan,
+                  amount,
+                });
+              });
             }
-            console.log("Payment updated successfully.");
+          } catch (emailError) {
+            console.error("Error during email sending:", emailError);
             res.status(200).json({
-              message: "Payment updated successfully.",
+              message: result.length > 0 ? "Payment updated successfully." : "Payment verified and saved successfully.",
               session_id,
               plan,
-              amount: amount_total / 100,
+              amount,
             });
-          });
-        } else {
-          // If user does not exist, insert a new record
-          const insertSql = `
-            INSERT INTO subscription (user_id, stripe_session_id, amount_paid, days, type, start_date, end_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-          `;
-
-          const insertValues = [
-            user_id,
-            session_id,
-            amount_total / 100,
-            days,
-            plan,
-            startDate,
-            endDate,
-          ];
-
-          db.query(insertSql, insertValues, (err) => {
-            if (err) {
-              console.error("Database insertion error:", err);
-              return res.status(500).json({ error: "Database error" });
-            }
-            console.log("Payment saved successfully.");
-            res.status(200).json({
-              message: "Payment verified and saved.",
-              session_id,
-              plan,
-              amount: amount_total / 100,
-            });
-          });
-        }
-      });
-    } else {
-      res.status(400).json({ error: "Payment not completed." });
-    }
+          }
+        });
+      } else {
+        res.status(400).json({ error: "Payment not completed." });
+      }
+    });
   } catch (error) {
     console.error("Error verifying payment:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -944,7 +1094,7 @@ app.post("/fetchplan", (req, res) => {
 
   // Ensure user_id is provided before querying the database
   if (!user_id) {
-    return res.status(400).json({ error: "User ID is required", status: "2" });
+    return res.status(200).json({ error: "User ID is required", status: "2" });
   }
 
   // Define the query to fetch subscription details for the given user_id
@@ -954,13 +1104,13 @@ app.post("/fetchplan", (req, res) => {
   db.query(checkSubscriptionQuery, [user_id], (err, rows) => {
     if (err) {
       console.error("Error fetching subscription:", err);
-      return res.status(500).json({ error: "Database error", status: "2" });
+      return res.status(200).json({ error: "Database error", status: "2" });
     }
 
     // If no rows are found, send an appropriate response
     if (rows.length === 0) {
       return res
-        .status(404)
+        .status(200)
         .json({ error: "No subscription found for this user", status: "2" });
     }
     var end = rows[0].end_date;
@@ -3965,13 +4115,6 @@ app.post("/updateProfile", upload.single("image"), (req, res) => {
   });
 });
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: "developerzone89@gmail.com",
-    pass: "jfdgufvjpxaatmsz",
-  },
-});
 
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000);
 
