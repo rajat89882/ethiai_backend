@@ -7,6 +7,7 @@ const PORT = 5000;
 var md5 = require("md5");
 const moment = require("moment");
 const nodemailer = require("nodemailer");
+const https = require('https');
 const multer = require("multer");
 const path = require("path");
 const { Console } = require("console");
@@ -20,9 +21,7 @@ app.use(cors());
 
 app.use("/uploads", express.static("uploads"));
 // Example backend API route
-app.get("/", (req, res) => {
-  res.json({ message: "Hello from backend API!" });
-});
+
 
 // Catch-all route to serve the frontend for any other routes (for client-side routing)
 
@@ -4424,6 +4423,9 @@ app.post("/checkOtp", (req, res) => {
   });
 });
 
+app.get("/", (req, res) => {
+  res.json({ message: "Hello from backend API!" });
+});
 // Start Server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
