@@ -16,8 +16,6 @@ const stripe = new Stripe(
 );
 const { link } = require("fs");
 
-app.use(cors());
-
 app.use("/uploads", express.static("uploads"));
 // Example backend API route
 app.get("/", (req, res) => {
@@ -65,10 +63,17 @@ db.getConnection((err, connection) => {
   }
 });
 
-app.use(cors({
-  origin: ["https://frontend.ethiai.io", "http://backend.ethiai.io", "http://localhost:3000"],
+// Place this before all routes and middleware
+const corsOptions = {
+  origin: ["http://localhost:3000", "https://frontend.ethiai.io"],
   credentials: true,
-}));
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 app.use(express.json());
 
 const transporter = nodemailer.createTransport({
