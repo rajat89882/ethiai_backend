@@ -69,8 +69,9 @@ const corsOptions = {
   optionsSuccessStatus: 204,
 };
 
-// Apply CORS and logging
+// Apply CORS globally
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json());
 
 const transporter = nodemailer.createTransport({
@@ -4428,12 +4429,9 @@ app.post("/checkOtp", (req, res) => {
 
 // Start Server
 app.get("/", (req, res) => {
-  res.json({ message: "Hello from backend API! ello" });
+  res.json({ message: "Hello from backend API! hello" });
 });
 
-const server = https.createServer(options, app);
-
-// Start server
-server.listen(PORT, () => {
-  console.log(`Server is running on https://localhost:${PORT}`);
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
