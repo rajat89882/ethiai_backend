@@ -16,9 +16,13 @@ const stripe = new Stripe(
 );
 const { link } = require("fs");
 
+app.use(cors());
 
 app.use("/uploads", express.static("uploads"));
 // Example backend API route
+app.get("/", (req, res) => {
+  res.json({ message: "Hello from backend API!" });
+});
 
 // Catch-all route to serve the frontend for any other routes (for client-side routing)
 
@@ -61,17 +65,10 @@ db.getConnection((err, connection) => {
   }
 });
 
-const corsOptions = {
+app.use(cors({
   origin: ["http://localhost:3000", "https://frontend.ethiai.io"],
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  optionsSuccessStatus: 204,
-};
-
-// Apply CORS globally
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+}));
 app.use(express.json());
 
 const transporter = nodemailer.createTransport({
@@ -4428,10 +4425,6 @@ app.post("/checkOtp", (req, res) => {
 });
 
 // Start Server
-app.get("/", (req, res) => {
-  res.json({ message: "Hello from backend API! hello" });
-});
-
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
