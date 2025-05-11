@@ -4428,7 +4428,7 @@ app.post("/checkOtp", (req, res) => {
 
 // Start Server
 app.get("/", (req, res) => {
-  res.json({ message: "Hello from backend API!" });
+  res.json({ message: "Hello from backend API! ello" });
 });
 
 const server = https.createServer(options, app);
