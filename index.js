@@ -1,13 +1,13 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const mysql = require("mysql2");
-const cors = require("cors"); // Import cors
 const app = express();
 const PORT = 5000;
 var md5 = require("md5");
 const moment = require("moment");
 const nodemailer = require("nodemailer");
-const https = require('https');
+const https = require("https");
+const fs = require("fs");
 const multer = require("multer");
 const path = require("path");
 const { Console } = require("console");
@@ -4422,11 +4422,16 @@ app.post("/checkOtp", (req, res) => {
     }
   });
 });
+const options = {
+  key: fs.readFileSync("/etc/letsencrypt/live/backend.ethiai.io/privkey.pem"), // Update path for production
+  cert: fs.readFileSync("/etc/letsencrypt/live/backend.ethiai.io/fullchain.pem"), // Update path for production
+};
 
 app.get("/", (req, res) => {
   res.json({ message: "Hello from backend API!" });
 });
 // Start Server
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+
+https.createServer(options, app).listen(PORT, () => {
+  console.log(`HTTPS server is running on port ${PORT}`);
 });
